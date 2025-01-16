@@ -19,7 +19,7 @@ class AimbotColor
     private static extern int ReleaseDC(IntPtr hWnd, IntPtr hDC);
 
 
-    private const int VK_XBUTTON2 = 0x06; // Botão lateral frontal
+    private const int VK_XBUTTON2 = 0x06;
 
     private readonly CancellationToken token;
     private readonly Arduino arduino;
@@ -38,6 +38,7 @@ class AimbotColor
 
     public void InitAimbot()
     {
+        Mat screen = null;
         try
         {
             while (!token.IsCancellationRequested)
@@ -48,20 +49,18 @@ class AimbotColor
 
                 if (isPressed)
                 {
-                    using (Mat screen = CaptureRegionFov())
+                    screen = CaptureRegionFov();
+                    if (screen != null)
                     {
-                        if (screen != null)
+                        Point? target = FindTargetHS(screen);
+
+                        if (target.HasValue)
                         {
-                            Point? target = FindTarget(screen);
+                            int relativeTargetX = (target.Value.X - fov) / 2;
+                            int relativeTargetY = ((target.Value.Y - fov) / 2) + 2;
 
-                            if (target.HasValue)
-                            {
-                                int relativeTargetX = (target.Value.X - fov) / 2;
-                                int relativeTargetY = ((target.Value.Y - fov) / 2) + 2;
-
-                                Point screenCoordinates = new(relativeTargetX, relativeTargetY);
-                                SendCoordinatesToArduino(screenCoordinates);
-                            }
+                            Point screenCoordinates = new(relativeTargetX, relativeTargetY);
+                            SendCoordinatesToArduino(screenCoordinates);
                         }
                     }
                 }
@@ -69,7 +68,7 @@ class AimbotColor
         }
         finally
         {
-            // Limpeza adicional, se necessário
+            screen?.Dispose();
         }
     }
 
@@ -108,7 +107,7 @@ class AimbotColor
                 IntPtr desktopDC = GetWindowDC(desktopHandle);
                 IntPtr graphicsDC = g.GetHdc();
 
-                // Copiar a região usando BitBlt
+
                 if (!BitBlt(graphicsDC, 0, 0, region.Width, region.Height, desktopDC, region.X, region.Y, 0x00CC0020))
                 {
                     Console.WriteLine("Erro ao copiar a região usando BitBlt.");
@@ -118,7 +117,7 @@ class AimbotColor
                 ReleaseDC(desktopHandle, desktopDC);
             }
 
-            // Converte o Bitmap em Mat
+
             Mat mat = new Mat();
             BitmapToMat(bitmap, mat);
             return mat;
@@ -132,14 +131,14 @@ class AimbotColor
 
     private void BitmapToMat(Bitmap bitmap, Mat mat)
     {
-        // Confirme que o Bitmap tem o formato suportado
+
         if (bitmap.PixelFormat != System.Drawing.Imaging.PixelFormat.Format24bppRgb &&
             bitmap.PixelFormat != System.Drawing.Imaging.PixelFormat.Format32bppArgb)
         {
             throw new NotSupportedException("Somente bitmaps em Format24bppRgb ou Format32bppArgb são suportados.");
         }
 
-        // Bloqueie os dados do Bitmap
+
         System.Drawing.Imaging.BitmapData bitmapData = bitmap.LockBits(
             new Rectangle(0, 0, bitmap.Width, bitmap.Height),
             System.Drawing.Imaging.ImageLockMode.ReadOnly,
@@ -148,13 +147,13 @@ class AimbotColor
 
         try
         {
-            // Configure o número de canais
+
             int channels = (bitmap.PixelFormat == System.Drawing.Imaging.PixelFormat.Format24bppRgb) ? 3 : 4;
 
-            // Crie o Mat com o mesmo tamanho e formato do Bitmap
+
             mat.Create(bitmap.Height, bitmap.Width, Emgu.CV.CvEnum.DepthType.Cv8U, channels);
 
-            // Copie os dados do Bitmap para o Mat
+
             using (Mat tempMat = new(bitmap.Height, bitmap.Width, Emgu.CV.CvEnum.DepthType.Cv8U, channels, bitmapData.Scan0, bitmapData.Stride))
             {
                 tempMat.CopyTo(mat);
@@ -162,15 +161,13 @@ class AimbotColor
         }
         finally
         {
-            // Libere os dados do Bitmap
+
             bitmap.UnlockBits(bitmapData);
         }
     }
 
-
     private Point? FindTarget(Mat screen)
     {
-        // Define os limites da cor (em HSV)
         var lowerBound = Colors2.GetColorBounds(enemyColor).Item1;
         var upperBound = Colors2.GetColorBounds(enemyColor).Item2;
 
@@ -179,10 +176,8 @@ class AimbotColor
         {
             CvInvoke.CvtColor(screen, hsvImage, ColorConversion.Bgr2Hsv);
 
-            // Cria uma máscara para as cores alvo
             CvInvoke.InRange(hsvImage, new ScalarArray(lowerBound), new ScalarArray(upperBound), mask);
 
-            // Calcula momentos para encontrar o centro da área detectada
             var moments = CvInvoke.Moments(mask, false);
 
             if (moments.M00 > 0)
@@ -190,6 +185,37 @@ class AimbotColor
                 int x = (int)(moments.M10 / moments.M00);
                 int y = (int)(moments.M01 / moments.M00);
                 return new Point(x, y);
+            }
+        }
+
+        return null;
+    }
+
+    private Point? FindTargetHS(Mat screen)
+    {
+        var lowerBound = Colors2.GetColorBounds(enemyColor).Item1;
+        var upperBound = Colors2.GetColorBounds(enemyColor).Item2;
+
+        using Mat hsvImage = new();
+        using Mat mask = new();
+
+        CvInvoke.CvtColor(screen, hsvImage, ColorConversion.Bgr2Hsv);
+
+        CvInvoke.InRange(hsvImage, new ScalarArray(lowerBound), new ScalarArray(upperBound), mask);
+
+        byte[] maskData = new byte[mask.Rows * mask.Cols];
+        mask.CopyTo(maskData);
+
+        for (int y = 0; y < mask.Rows; y++)
+        {
+            for (int x = 0; x < mask.Cols; x++)
+            {
+                int index = y * mask.Cols + x;
+
+                if (maskData[index] == 255)
+                {
+                    return new Point(x, y);
+                }
             }
         }
 

@@ -25,7 +25,7 @@ static class Colors2
     public static readonly Tuple<MCvScalar, MCvScalar> redBounds =
         new Tuple<MCvScalar, MCvScalar>(new MCvScalar(0, 150, 150), new MCvScalar(10, 255, 255));
     public static readonly Tuple<MCvScalar, MCvScalar> purpleBounds =
-        new Tuple<MCvScalar, MCvScalar>(new MCvScalar(130, 50, 100), new MCvScalar(160, 255, 255));
+        new Tuple<MCvScalar, MCvScalar>(new MCvScalar(130, 50, 100), new MCvScalar(130, 255, 255));
     public static readonly Tuple<MCvScalar, MCvScalar> yellowBounds =
         new Tuple<MCvScalar, MCvScalar>(new MCvScalar(30, 125, 150), new MCvScalar(30, 255, 255));
 
