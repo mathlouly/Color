@@ -1,4 +1,5 @@
 using System.IO.Ports;
+using System.Runtime.InteropServices;
 
 class Settings
 {
@@ -22,52 +23,45 @@ class Settings
     private CancellationTokenSource _spinnerCts;
 
     // Features
+    private bool _hiddenMenu = false;
     private bool _aimbotActive = false;
     private bool _triggerColorActive = false;
     private bool _noRecoilActive = false;
     private bool _spinnerActive = false;
 
+    private MenuOverlay menuOverlay;
+
+    [DllImport("user32.dll")]
+    private static extern short GetAsyncKeyState(int vKey);
+
     public Settings()
     {
         LoadConfig();
-        InitArduinoConfig();
-        InitAimbotColorConfig();
-        InitAimbotOverlayConfig();
+
+        Console.Write($"Do you want to change settings? [Y=Yes N=No] (default=N): ");
+        string choice = Console.ReadLine();
+
+        if (!string.IsNullOrEmpty(choice))
+        {
+            if (choice.ToLower() == "y")
+            {
+                InitArduinoConfig();
+                InitAimbotColorConfig();
+                InitAimbotOverlayConfig();
+            }
+        }
 
         // Arduino
         _arduino = new Arduino(_settings["serialPortName"]);
         _arduino.InitSerialPortConn();
 
-        while (true)
-        {
-            SelectFeatures();
+        // Menu
+        Thread menuThread = new(ListenerMenuOption);
+        menuThread.Start();
 
-            // Check features active
-            if (_aimbotActive) InitAimbotColor();
-            if (!_aimbotActive && _aimbotColorCts != null && _aimbotOverlayCts != null)
-            {
-                _aimbotColorCts.Cancel();
-                _aimbotOverlayCts.Cancel();
-            }
-
-            if (_triggerColorActive) InitTriggerColor();
-            if (!_triggerColorActive && _triggerCts != null)
-            {
-                _triggerCts.Cancel();
-            }
-
-            if (_noRecoilActive) InitNoRecoil();
-            if (!_noRecoilActive && _noRecoilCts != null)
-            {
-                _noRecoilCts.Cancel();
-            }
-
-            if (_spinnerActive) InitSpinner();
-            if (!_spinnerActive && _spinnerCts != null)
-            {
-                _spinnerCts.Cancel();
-            }
-        }
+        menuOverlay = new MenuOverlay(_settings["serialPortName"], _settings["enemyColor"], _settings["fov"]);
+        Application.EnableVisualStyles();
+        Application.Run(menuOverlay);
     }
 
     void LoadConfig()
@@ -83,8 +77,10 @@ class Settings
             }
 
             Console.WriteLine($"File '{_configPath}' success create!\n");
-            Thread.Sleep(1500);
-            Console.Clear();
+        }
+        else
+        {
+            Console.WriteLine($"File '{_configPath}' success load!\n");
         }
 
         foreach (var line in File.ReadAllLines(_configPath))
@@ -99,7 +95,15 @@ class Settings
             {
                 string key = parts[0].Trim();
                 string value = parts[1].Trim();
-                _settings[key] = value;
+
+                if (int.TryParse(value, out int valueInt))
+                {
+                    _settings[key] = valueInt;
+                }
+                else
+                {
+                    _settings[key] = value;
+                }
             }
         }
     }
@@ -115,51 +119,94 @@ class Settings
         }
     }
 
-    private void SelectFeatures()
+    private void MenuOverlayUpdate()
     {
-        Console.Clear();
-        Console.Write($"""
-        ### Menu ###
+        menuOverlay.UpdateMenuOptions(
+            _hiddenMenu,
+            _aimbotActive,
+            _triggerColorActive,
+            _noRecoilActive,
+            _spinnerActive
+        );
+    }
 
-        1) Aimbot ({(_aimbotActive ? "ON" : "OFF")})
-        2) Trigger ({(_triggerColorActive ? "ON" : "OFF")})
-        3) NoRecoil ({(_noRecoilActive ? "ON" : "OFF")})
-        4) Spinner ({(_spinnerActive ? "ON" : "OFF")})
-        5) Exit
-
-        Select an option: 
-        """);
-
-        string choice = Console.ReadLine();
-
-        if (!string.IsNullOrEmpty(choice))
+    private void ListenerMenuOption()
+    {
+        while (true)
         {
-            _ = int.TryParse(choice, out int choiceInt);
-
-            if (choiceInt >= 1 && choiceInt <= 5)
+            if (GetAsyncKeyState((int)Keys.F1) < 0)
             {
-                switch (choiceInt)
+                _aimbotActive = !_aimbotActive;
+
+                if (_aimbotActive) InitAimbotColor();
+                if (!_aimbotActive && _aimbotColorCts != null && _aimbotOverlayCts != null)
                 {
-                    case 1:
-                        _aimbotActive = !_aimbotActive;
-                        break;
-                    case 2:
-                        _triggerColorActive = !_triggerColorActive;
-                        break;
-                    case 3:
-                        _noRecoilActive = !_noRecoilActive;
-                        break;
-                    case 4:
-                        _spinnerActive = !_spinnerActive;
-                        break;
-                    case 5:
-                        Environment.Exit(0);
-                        break;
+                    _aimbotColorCts.Cancel();
+                    _aimbotOverlayCts.Cancel();
                 }
+
+                MenuOverlayUpdate();
+                Thread.Sleep(200);
+            }
+
+            if (GetAsyncKeyState((int)Keys.F2) < 0)
+            {
+                _triggerColorActive = !_triggerColorActive;
+
+                if (_triggerColorActive) InitTriggerColor();
+                if (!_triggerColorActive && _triggerCts != null)
+                {
+                    _triggerCts.Cancel();
+                }
+
+                MenuOverlayUpdate();
+                Thread.Sleep(200);
+            }
+
+            if (GetAsyncKeyState((int)Keys.F3) < 0)
+            {
+                _noRecoilActive = !_noRecoilActive;
+
+                if (_noRecoilActive) InitNoRecoil();
+                if (!_noRecoilActive && _noRecoilCts != null)
+                {
+                    _noRecoilCts.Cancel();
+                }
+
+                MenuOverlayUpdate();
+                Thread.Sleep(200);
+            }
+
+            if (GetAsyncKeyState((int)Keys.F4) < 0)
+            {
+                _spinnerActive = !_spinnerActive;
+
+                if (_spinnerActive) InitSpinner();
+                if (!_spinnerActive && _spinnerCts != null)
+                {
+                    _spinnerCts.Cancel();
+                }
+
+                MenuOverlayUpdate();
+                Thread.Sleep(200);
+            }
+
+            if (GetAsyncKeyState((int)Keys.Home) < 0)
+            {
+                _hiddenMenu = !_hiddenMenu;
+
+                MenuOverlayUpdate();
+                Thread.Sleep(200);
+            }
+
+            if (GetAsyncKeyState((int)Keys.F5) < 0)
+            {
+                Environment.Exit(0);
             }
         }
     }
 
+    // Configs
     private void InitArduinoConfig()
     {
         _listSerialPortName = SerialPort.GetPortNames();
@@ -193,8 +240,6 @@ class Settings
                 Console.WriteLine("Invalid choice. Please enter a number between 1 and {0}.", _listSerialPortName.Length);
             }
         }
-
-        Console.Clear();
     }
 
     private void InitAimbotColorConfig()
@@ -207,36 +252,25 @@ class Settings
             _settings["enemyColor"] = enemyColor;
             WriterAllConfig();
         }
-
-        Console.Clear();
     }
 
     private void InitAimbotOverlayConfig()
     {
         Console.Write($"Define fov overlay aimbot (default={_settings["fov"]}): ");
         string fov = Console.ReadLine();
-        int fovInt = 40;
 
         if (!string.IsNullOrEmpty(fov))
         {
-            int.TryParse(_settings["fov"], out fovInt);
-
-            if (fovInt > -1)
+            if (int.TryParse(fov, out int fovInt))
             {
-                _settings["fov"] = fov;
+                _settings["fov"] = fovInt;
                 WriterAllConfig();
             }
             else
             {
                 Console.WriteLine("Invalid choice. Please enter a number greater than 0.");
-
             }
         }
-
-        int.TryParse(_settings["fov"], out fovInt);
-        _settings["fov"] = fovInt;
-
-        Console.Clear();
     }
 
 

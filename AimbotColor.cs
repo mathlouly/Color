@@ -23,11 +23,11 @@ class AimbotColor
 
     private readonly CancellationToken token;
     private readonly Arduino arduino;
-    private readonly AimbotOverlay? aimbotOverlay;
+    private readonly AimbotOverlay aimbotOverlay;
     private readonly int fov;
     private readonly string enemyColor;
 
-    public AimbotColor(CancellationToken token, Arduino arduino, AimbotOverlay? aimbotOverlay, int fov, string enemyColor)
+    public AimbotColor(CancellationToken token, Arduino arduino, AimbotOverlay aimbotOverlay, int fov, string enemyColor)
     {
         this.token = token;
         this.arduino = arduino;
@@ -57,7 +57,7 @@ class AimbotColor
                         if (target.HasValue)
                         {
                             int relativeTargetX = (target.Value.X - fov) / 2;
-                            int relativeTargetY = ((target.Value.Y - fov) / 2) + 2;
+                            int relativeTargetY = ((target.Value.Y - fov) / 2) + 3;
 
                             Point screenCoordinates = new(relativeTargetX, relativeTargetY);
                             SendCoordinatesToArduino(screenCoordinates);
@@ -168,8 +168,8 @@ class AimbotColor
 
     private Point? FindTarget(Mat screen)
     {
-        var lowerBound = Colors2.GetColorBounds(enemyColor).Item1;
-        var upperBound = Colors2.GetColorBounds(enemyColor).Item2;
+        var lowerBound = Colors.GetColorBounds(enemyColor).Item1;
+        var upperBound = Colors.GetColorBounds(enemyColor).Item2;
 
         using (Mat hsvImage = new())
         using (Mat mask = new())
@@ -193,8 +193,8 @@ class AimbotColor
 
     private Point? FindTargetHS(Mat screen)
     {
-        var lowerBound = Colors2.GetColorBounds(enemyColor).Item1;
-        var upperBound = Colors2.GetColorBounds(enemyColor).Item2;
+        var lowerBound = Colors.GetColorBounds(enemyColor).Item1;
+        var upperBound = Colors.GetColorBounds(enemyColor).Item2;
 
         using Mat hsvImage = new();
         using Mat mask = new();

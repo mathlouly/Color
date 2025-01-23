@@ -40,7 +40,7 @@ class TriggerColor(CancellationToken token, Arduino arduino, string enemyColor)
                         if (target.HasValue)
                         {
                             SendFireToArduino();
-                            Thread.Sleep(250);
+                            Thread.Sleep(50);
                         }
                     }
                 }
@@ -134,8 +134,8 @@ class TriggerColor(CancellationToken token, Arduino arduino, string enemyColor)
 
     private Point? FindTarget(Mat screen)
     {
-        var lowerBound = Colors2.GetColorBounds(enemyColor).Item1;
-        var upperBound = Colors2.GetColorBounds(enemyColor).Item2;
+        var lowerBound = Colors.GetColorBounds(enemyColor).Item1;
+        var upperBound = Colors.GetColorBounds(enemyColor).Item2;
 
         using (Mat hsvImage = new())
         using (Mat mask = new())

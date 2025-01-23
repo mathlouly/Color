@@ -56,6 +56,7 @@ class AimbotOverlay : Form
         {
             CreateParams cp = base.CreateParams;
             cp.ExStyle |= _WS_EX_TRANSPARENT | _WS_EX_LAYERED;
+            cp.ExStyle |= 0x80;
             return cp;
         }
     }
